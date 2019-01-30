@@ -3,21 +3,45 @@ import sys
 import traceback
 from threading import Thread
 
+
+class Route():
+    def __init__(self):
+        self.routes = {}
+
+    def route(self, route_str):
+        def decorator(f):
+            self.routes[route_str] = f
+            return f
+
+        return decorator
+
+    def serve(self, path):
+        view_function = self.routes.get(path)
+        if view_function:
+            return view_function()
+        else:
+            raise ValueError('Route "{}"" has not been registered'.format(path))
+app = Route()
+
+
+@app.route('/hello')
 def hello():
     msg = '<html><body><h1>Hello World</h1><p>More content here</p></body></html>'
     return msg
 
+@app.route('/test')
 def test():
     msg = '<html><body><h1>This is a test</h1><p>More content here</p></body></html>'
     return msg
 
+@app.route('/something')
 def something():
-    msg = '<html><body><h1>This is a something</h1><p>More content here</p></body></html>'
+    msg = '<html><body><h1>This is something</h1><p>More content here</p></body></html>'
     return msg
+
 
 def main():
     start_server()
-
 
 def start_server():
     host = "127.0.0.1"
@@ -40,11 +64,9 @@ def start_server():
 
     # infinite loop- do not reset for every requests
     while True:
-        # import pdb; pdb.set_trace()
         connection, address = soc.accept()
         ip, port = str(address[0]), str(address[1])
         print("Connected with " + ip + ":" + port)
-
         try:
             Thread(target=client_thread, args=(connection, ip, port)).start()
         except:
@@ -54,7 +76,7 @@ def start_server():
     soc.close()
 
 
-def client_thread(connection, ip, port, max_buffer_size = 1024):
+def client_thread(connection, ip, port, max_buffer_size = 2048):
     is_active = True
 
     while is_active:
@@ -63,7 +85,6 @@ def client_thread(connection, ip, port, max_buffer_size = 1024):
             'Content-Type': 'text/html; encoding=utf8',
             'Connection': 'close',
         }
-
         response_headers_raw = ''.join('%s: %s\r\n' % (k, v) for k, v in response_headers.items())
         response_proto = 'HTTP/1.1'
         response_status = '200'
@@ -81,31 +102,19 @@ def client_thread(connection, ip, port, max_buffer_size = 1024):
             print("Processed result: {}".format(client_input))
             # connection.sendall("-".encode("utf8"))
             if 'GET' in client_input or 'HEAD' in client_input:
-                print("request method:", client_input[6:9])
-                print('request header: ', client_input[9:])
-        if '/HELLO' in client_input:
+                print("request method:", client_input[0])
+                print('request header: ', client_input[1:])
+
+        path = client_input[1]
+        # import pdb; pdb.set_trace()
+        print(app.routes)
+        if path in app.routes:
             response = 'response: 200 OK'
             connection.send(r)
             connection.send(response_headers_raw)
             connection.send('\r\n') # to separate headers from body
-            connection.send(hello().encode(encoding="utf8"))
+            connection.send(app.serve(path).encode(encoding='utf8'))
             connection.send(response)
-            connection.close()
-        elif '/SOMETHING' in client_input:
-            response = 'response: 200 OK'
-            connection.send(r)
-            connection.send(response_headers_raw)
-            connection.send('\r\n')
-            connection.sendall(something().encode(encoding="utf8"))
-            connection.send(response)
-            connection.close()
-        elif '/TEST' in client_input:
-            response = 'response: 200 OK'
-            connection.send(r)
-            connection.send(response_headers_raw)
-            connection.send('\r\n')
-            connection.sendall(test().encode(encoding="utf8"))
-            connection.send(bad_response)
             connection.close()
         else:
             response ='response: 400 Bad request'
@@ -115,6 +124,7 @@ def client_thread(connection, ip, port, max_buffer_size = 1024):
             connection.send("<html><body><h1>Error 404 path not found</h1></body></html>".encode(encoding="utf8"))
             connection.send(response)
             connection.close()
+
 
 def receive_input(connection, max_buffer_size):
     client_input = connection.recv(max_buffer_size)
@@ -131,9 +141,8 @@ def receive_input(connection, max_buffer_size):
 
 def process_input(input_str):
     print("Processing the input received from client")
-    return "Hello " + str(input_str).upper()
-
+    input_var =  str(input_str).split(' ')
+    return input_var
 
 if __name__ == "__main__":
     main()
-
